@@ -103,6 +103,7 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
       }
       showClaim(result);
       setNotice(null);
+      void refresh().catch(() => undefined);
     } catch {
       setNotice({ tone: "error", text: "Couldn’t reach the pool. Try again." });
     } finally {
@@ -378,15 +379,15 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
 
       <section className="mt-14">
         <div className="mb-3 flex items-baseline justify-between gap-4">
-          <h2 className="text-xl font-medium">Recently shared</h2>
+          <h2 className="text-xl font-medium">Recently handed out</h2>
           <span className="text-sm text-faint tabular-nums">
-            {recentLabel(pool.recent.length, pool.active)}
+            {recentLabel(pool.recent.length, pool.recentlyHandedOut)}
           </span>
         </div>
         <ul className="overflow-hidden rounded-card border border-line bg-surface">
           {pool.recent.length === 0 ? (
             <li className="px-4 py-6 text-center text-muted">
-              No codes yet. The first one added is the first one handed out.
+              No codes have been handed out yet. New codes are first in line.
             </li>
           ) : (
             pool.recent.map((row) => (
@@ -397,24 +398,12 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
                 <span className="font-mono text-base font-medium tracking-code">{row.code}</span>
                 <span className="min-w-0 flex-1 text-sm text-muted">
                   <span className="block" suppressHydrationWarning>
-                    Added {ago(row.createdMs)}
+                    Handed out {ago(row.handedOutMs)}
                   </span>
                   <span className="block text-faint tabular-nums">
                     ~{row.remaining} left{row.verified ? " · checked" : ""}
                   </span>
                 </span>
-                <button
-                  type="button"
-                  className="h-10 shrink-0 rounded-control border border-line px-3 text-sm font-medium hover:border-faint disabled:opacity-50"
-                  disabled={busy}
-                  onClick={() => {
-                    document.getElementById("share")?.scrollIntoView({ block: "nearest" });
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                    void take({ codeId: row.id });
-                  }}
-                >
-                  Use
-                </button>
               </li>
             ))
           )}
