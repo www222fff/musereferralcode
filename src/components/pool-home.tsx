@@ -50,12 +50,6 @@ function writeSaved(claim: SavedClaim | null) {
   }
 }
 
-function recentLabel(shown: number, total: number): string {
-  if (total <= 0) return "None yet";
-  if (shown >= total) return `All ${total}`;
-  return `Newest ${shown} of ${total}`;
-}
-
 function statusLine(pool: PoolSnapshot): string {
   if (pool.active <= 0) return "Waiting for the first code";
   const codes = pool.active === 1 ? "1 code in rotation" : `${pool.active} codes in rotation`;
@@ -89,6 +83,13 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
     const saved: SavedClaim = { ...next, at: Date.now(), feedback };
     setClaim(saved);
     writeSaved(saved);
+    setCopied(false);
+  }
+
+  function resetClaim() {
+    setClaim(null);
+    writeSaved(null);
+    setNotice(null);
     setCopied(false);
   }
 
@@ -197,6 +198,15 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
           rotates what the pool still has left, so one public post doesn’t burn a
           code in minutes.
         </p>
+        <a
+          href="https://twitter.com/intent/follow?screen_name=BlockInsight214"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Follow @BlockInsight214 on X"
+          className="mt-5 inline-flex items-center rounded-full bg-ink px-5 py-2.5 text-base font-medium text-bg no-underline transition-opacity duration-150 hover:opacity-85"
+        >
+          Follow on X · @BlockInsight214 · 王小庄
+        </a>
 
         <div className="relative z-0 mx-auto mt-8 mb-4 w-full max-w-md rounded-card border border-line bg-surface p-5 text-left shadow-card">
           {!shown ? (
@@ -249,7 +259,7 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
               <button
                 type="button"
                 className="mt-2 flex h-12 w-full items-center justify-center rounded-control border border-line bg-surface text-base font-medium text-ink transition-opacity duration-150 hover:border-faint disabled:opacity-50"
-                onClick={() => void take({ excludeId: claim.codeId })}
+                onClick={resetClaim}
                 disabled={busy}
               >
                 Get another code
@@ -295,42 +305,6 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
         </div>
       </section>
 
-      <ol className="relative z-0 mt-16 grid list-none gap-6 p-0 sm:grid-cols-3">
-        <li className="flex gap-3">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full border border-line text-sm font-medium">
-            1
-          </span>
-          <div>
-            <h2 className="text-base font-medium">Get a code</h2>
-            <p className="mt-1 text-sm text-muted">
-              Handouts favor codes with more estimated uses left.
-            </p>
-          </div>
-        </li>
-        <li className="flex gap-3">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full border border-line text-sm font-medium">
-            2
-          </span>
-          <div>
-            <h2 className="text-base font-medium">Redeem in Muse</h2>
-            <p className="mt-1 text-sm text-muted">
-              Both people get 1 billion tokens if it still has uses.
-            </p>
-          </div>
-        </li>
-        <li className="flex gap-3">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full border border-line text-sm font-medium">
-            3
-          </span>
-          <div>
-            <h2 className="text-base font-medium">Add your own</h2>
-            <p className="mt-1 text-sm text-muted">
-              It joins the rotation right away.
-            </p>
-          </div>
-        </li>
-      </ol>
-
       <section id="share" className="mt-14 scroll-mt-20 border-t border-line pt-10">
         <form onSubmit={(event) => void onShare(event)} className="mx-auto max-w-xl">
           <label htmlFor="code-input" className="block text-lg font-medium">
@@ -347,7 +321,7 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
               spellCheck={false}
               maxLength={12}
               required
-              className="h-[70px] w-full min-w-0 flex-1 rounded-control border border-line bg-surface px-4 font-mono text-base tracking-wider text-ink uppercase placeholder:font-sans placeholder:tracking-normal placeholder:text-faint placeholder:normal-case"
+              className="h-[80px] w-full min-w-0 flex-1 rounded-control border border-line bg-surface px-4 font-mono text-base tracking-wider text-ink uppercase placeholder:font-sans placeholder:tracking-normal placeholder:text-faint placeholder:normal-case"
             />
             <button
               type="submit"
@@ -380,9 +354,7 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
       <section className="mt-14">
         <div className="mb-3 flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-medium">Recently handed out</h2>
-          <span className="text-sm text-faint tabular-nums">
-            {recentLabel(pool.recent.length, pool.recentlyHandedOut)}
-          </span>
+          <span className="text-sm text-faint tabular-nums">Latest 12</span>
         </div>
         <ul className="overflow-hidden rounded-card border border-line bg-surface">
           {pool.recent.length === 0 ? (

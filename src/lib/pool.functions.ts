@@ -21,7 +21,6 @@ export type RecentCode = {
 export type PoolSnapshot = {
   active: number;
   confirmed: number;
-  recentlyHandedOut: number;
   recent: RecentCode[];
 };
 
@@ -146,14 +145,10 @@ async function duplicateMessage(sql: Sql, code: string): Promise<string> {
 
 export const getPool = createServerFn({ method: "GET" }).handler(async (): Promise<PoolSnapshot> => {
   const sql = await getSql();
-  const counts = await sql<{ active: number; confirmed: number; recently_handed_out: number }>`
+  const counts = await sql<{ active: number; confirmed: number }>`
     select
       (select count(*) from codes where status = 'active' and handouts < assumed_cap) as active,
-      (select coalesce(sum(worked), 0) from codes) as confirmed,
-      (
-        select count(distinct code_id)
-        from claims
-      ) as recently_handed_out
+      (select coalesce(sum(worked), 0) from codes) as confirmed
   `;
   const recent = await sql<{
     id: string;
@@ -179,7 +174,6 @@ export const getPool = createServerFn({ method: "GET" }).handler(async (): Promi
   return {
     active: num(counts[0]?.active),
     confirmed: num(counts[0]?.confirmed),
-    recentlyHandedOut: num(counts[0]?.recently_handed_out),
     recent: recent.map((row) => ({
       id: row.id,
       code: row.code,
