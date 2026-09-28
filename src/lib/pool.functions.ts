@@ -13,7 +13,7 @@ const CODE_RE = /^[A-Z0-9]{4,12}$/;
 export type RecentCode = {
   id: string;
   code: string;
-  createdMs: number;
+  handedOutMs: number;
   remaining: number;
   verified: boolean;
 };
@@ -21,6 +21,7 @@ export type RecentCode = {
 export type PoolSnapshot = {
   active: number;
   confirmed: number;
+  recentlyHandedOut: number;
   recent: RecentCode[];
 };
 
@@ -38,6 +39,7 @@ type Fail = { ok: false; error: string };
 type CodeCandidate = {
   id: string;
   code: string;
+  createdMs: number;
   handouts: number;
   worked: number;
   assumed_cap: number;
@@ -67,6 +69,11 @@ function visitorKey(): string {
 
 function pickWeighted(rows: CodeCandidate[], excludeId?: string): CodeCandidate | null {
   const pool = rows.filter((row) => row.id !== excludeId && remainingOf(row) > 0);
+  const fresh = pool
+    .filter((row) => row.handouts === 0)
+    .sort((a, b) => a.createdMs - b.createdMs);
+  if (fresh[0]) return fresh[0];
+
   const total = pool.reduce((sum, row) => sum + remainingOf(row), 0);
   if (!total || pool.length === 0) return null;
   let ticket = Math.random() * total;
@@ -81,17 +88,25 @@ async function loadCandidates(sql: Sql): Promise<CodeCandidate[]> {
   const rows = await sql<{
     id: string;
     code: string;
+    created_ms: number;
     handouts: number;
     worked: number;
     assumed_cap: number;
   }>`
-    select id, code, handouts, worked, assumed_cap
+    select
+      id,
+      code,
+      (extract(epoch from created_at) * 1000) as created_ms,
+      handouts,
+      worked,
+      assumed_cap
     from codes
     where status = 'active' and handouts < assumed_cap
   `;
   return rows.map((row) => ({
     id: row.id,
     code: row.code,
+    createdMs: num(row.created_ms),
     handouts: num(row.handouts),
     worked: num(row.worked),
     assumed_cap: num(row.assumed_cap),
@@ -114,19 +129,8 @@ async function duplicateMessage(sql: Sql, code: string): Promise<string> {
     status: string;
     handouts: number;
     assumed_cap: number;
-    pos: number;
   }>`
-    select
-      status,
-      handouts,
-      assumed_cap,
-      (
-        select count(*)
-        from codes newer
-        where newer.status = 'active'
-          and newer.handouts < newer.assumed_cap
-          and newer.created_at >= codes.created_at
-      ) as pos
+    select status, handouts, assumed_cap
     from codes
     where code = ${code}
     limit 1
@@ -137,46 +141,49 @@ async function duplicateMessage(sql: Sql, code: string): Promise<string> {
   if (!inRotation) {
     return `${code} is already in the pool, but it isn’t listed. It was taken out of rotation after a used-up report.`;
   }
-  if (num(row.pos) > 12) {
-    return `${code} is already in the pool. Only the 12 newest codes are listed, so this older one isn’t shown below.`;
-  }
-  return `${code} is already in the pool. It should be under Recently shared.`;
+  return `${code} is already in the pool and remains in rotation.`;
 }
 
 export const getPool = createServerFn({ method: "GET" }).handler(async (): Promise<PoolSnapshot> => {
   const sql = await getSql();
-  const counts = await sql<{ active: number; confirmed: number }>`
+  const counts = await sql<{ active: number; confirmed: number; recently_handed_out: number }>`
     select
       (select count(*) from codes where status = 'active' and handouts < assumed_cap) as active,
-      (select coalesce(sum(worked), 0) from codes) as confirmed
+      (select coalesce(sum(worked), 0) from codes) as confirmed,
+      (
+        select count(distinct code_id)
+        from claims
+      ) as recently_handed_out
   `;
   const recent = await sql<{
     id: string;
     code: string;
-    created_ms: number;
+    handed_out_ms: number;
     handouts: number;
     assumed_cap: number;
     worked: number;
   }>`
     select
-      id,
-      code,
-      (extract(epoch from created_at) * 1000) as created_ms,
-      handouts,
-      assumed_cap,
-      worked
+      codes.id,
+      codes.code,
+      (extract(epoch from max(claims.created_at)) * 1000) as handed_out_ms,
+      codes.handouts,
+      codes.assumed_cap,
+      codes.worked
     from codes
-    where status = 'active' and handouts < assumed_cap
-    order by created_at desc
+    join claims on claims.code_id = codes.id
+    group by codes.id, codes.code, codes.handouts, codes.assumed_cap, codes.worked
+    order by max(claims.created_at) desc
     limit 12
   `;
   return {
     active: num(counts[0]?.active),
     confirmed: num(counts[0]?.confirmed),
+    recentlyHandedOut: num(counts[0]?.recently_handed_out),
     recent: recent.map((row) => ({
       id: row.id,
       code: row.code,
-      createdMs: num(row.created_ms),
+      handedOutMs: num(row.handed_out_ms),
       remaining: remainingOf({
         handouts: num(row.handouts),
         assumed_cap: num(row.assumed_cap),
@@ -231,11 +238,11 @@ export const claimCode = createServerFn({ method: "POST" })
         where id = ${chosen.id}
           and status = 'active'
           and handouts < assumed_cap
+          and handouts = ${chosen.handouts}
         returning id, code, handouts, worked, assumed_cap
       `;
       const row = updated[0];
       if (!row) {
-        if (data.codeId) return { ok: false, error: "That code isn’t in rotation anymore." };
         continue;
       }
 
