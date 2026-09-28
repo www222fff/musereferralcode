@@ -321,7 +321,7 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
               spellCheck={false}
               maxLength={12}
               required
-              className="h-[80px] w-full min-w-0 flex-1 rounded-control border border-line bg-surface px-4 font-mono text-base tracking-wider text-ink uppercase placeholder:font-sans placeholder:tracking-normal placeholder:text-faint placeholder:normal-case"
+              className="h-12 w-full min-w-0 flex-1 rounded-control border border-line bg-surface px-4 font-mono text-base tracking-wider text-ink uppercase placeholder:font-sans placeholder:tracking-normal placeholder:text-faint placeholder:normal-case"
             />
             <button
               type="submit"
