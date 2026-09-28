@@ -5,6 +5,7 @@ import { getSql, type Sql } from "@/lib/db";
 const VISITOR_COOKIE = "relay_vid";
 const ASSUMED_CAP = 24;
 const CLAIM_LIMIT_PER_HOUR = 30;
+const USED_UP_REPORT_THRESHOLD = 3;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CODE_RE = /^[A-Z0-9]{4,12}$/;
@@ -290,6 +291,23 @@ export const sendFeedback = createServerFn({ method: "POST" })
     if (!found) return { ok: false, error: "That handoff isn’t on this browser." };
     if (found.result) return { ok: false, error: "That handoff was already reported." };
 
+    if (data.result === "used_up") {
+      const prior = await sql<{ id: string }>`
+        select id
+        from claims
+        where code_id = ${found.code_id}
+          and visitor_key = ${visitor}
+          and result = 'used_up'
+        limit 1
+      `;
+      if (prior[0]) {
+        return {
+          ok: false,
+          error: "This browser already reported that code as used up.",
+        };
+      }
+    }
+
     const marked = await sql<{ code_id: string }>`
       update claims
       set result = ${data.result}
@@ -307,13 +325,26 @@ export const sendFeedback = createServerFn({ method: "POST" })
         where id = ${markedRow.code_id}
       `;
     } else if (data.result === "used_up") {
+      const reports = await sql<{ n: number }>`
+        select count(distinct visitor_key) as n
+        from claims
+        where code_id = ${markedRow.code_id}
+          and result = 'used_up'
+      `;
+      const independentReports = num(reports[0]?.n);
       await sql`
         update codes
         set
           used_up = used_up + 1,
-          streak_bad = streak_bad + 1,
-          assumed_cap = handouts,
-          status = case when streak_bad + 1 >= 3 then 'retired' else status end
+          streak_bad = ${independentReports},
+          assumed_cap = case
+            when ${independentReports} >= ${USED_UP_REPORT_THRESHOLD} then handouts
+            else assumed_cap
+          end,
+          status = case
+            when ${independentReports} >= ${USED_UP_REPORT_THRESHOLD} then 'retired'
+            else status
+          end
         where id = ${markedRow.code_id}
       `;
     }
