@@ -305,6 +305,42 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
         </div>
       </section>
 
+      <ol className="relative z-0 mt-16 grid list-none gap-6 p-0 sm:grid-cols-3">
+        <li className="flex gap-3">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full border border-line text-sm font-medium">
+            1
+          </span>
+          <div>
+            <h2 className="text-base font-medium">Get a code</h2>
+            <p className="mt-1 text-sm text-muted">
+              Handouts favor codes with more estimated uses left.
+            </p>
+          </div>
+        </li>
+        <li className="flex gap-3">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full border border-line text-sm font-medium">
+            2
+          </span>
+          <div>
+            <h2 className="text-base font-medium">Redeem in Muse</h2>
+            <p className="mt-1 text-sm text-muted">
+              Both people get 1 billion tokens if it still has uses.
+            </p>
+          </div>
+        </li>
+        <li className="flex gap-3">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full border border-line text-sm font-medium">
+            3
+          </span>
+          <div>
+            <h2 className="text-base font-medium">Add your own</h2>
+            <p className="mt-1 text-sm text-muted">
+              It joins the rotation right away.
+            </p>
+          </div>
+        </li>
+      </ol>
+
       <section id="share" className="mt-14 scroll-mt-20 border-t border-line pt-10">
         <form onSubmit={(event) => void onShare(event)} className="mx-auto max-w-xl">
           <label htmlFor="code-input" className="block text-lg font-medium">
@@ -321,7 +357,7 @@ export function PoolHome({ initial }: { initial: PoolSnapshot }) {
               spellCheck={false}
               maxLength={12}
               required
-              className="h-[80px] w-full min-w-0 flex-1 rounded-control border border-line bg-surface px-4 font-mono text-base tracking-wider text-ink uppercase placeholder:font-sans placeholder:tracking-normal placeholder:text-faint placeholder:normal-case"
+              className="h-12 w-full min-w-0 flex-1 rounded-control border border-line bg-surface px-4 font-mono text-base tracking-wider text-ink uppercase placeholder:font-sans placeholder:tracking-normal placeholder:text-faint placeholder:normal-case"
             />
             <button
               type="submit"
