@@ -371,10 +371,63 @@ export const shareCode = createServerFn({ method: "POST" })
     const sql = await getSql();
     const visitor = visitorKey();
 
-    const dup = await sql<{ id: string }>`select id from codes where code = ${normalized} limit 1`;
-    if (dup[0]) return { ok: false, error: await duplicateMessage(sql, normalized) };
+    const duplicate = await sql<{
+      id: string;
+      status: string;
+      handouts: number;
+      assumed_cap: number;
+      used_up_reporters: number;
+    }>`
+      select
+        codes.id,
+        codes.status,
+        codes.handouts,
+        codes.assumed_cap,
+        (
+          select count(distinct claims.visitor_key)
+          from claims
+          where claims.code_id = codes.id
+            and claims.result = 'used_up'
+        ) as used_up_reporters
+      from codes
+      where codes.code = ${normalized}
+      limit 1
+    `;
+    const existing = duplicate[0];
+    if (existing) {
+      const inRotation =
+        existing.status === "active" &&
+        num(existing.handouts) < num(existing.assumed_cap);
+      if (inRotation) {
+        return { ok: false, error: await duplicateMessage(sql, normalized) };
+      }
 
-    await sql`alter table codes drop constraint if exists codes_visitor_key_key`;
+      const reporters = num(existing.used_up_reporters);
+      if (reporters >= USED_UP_REPORT_THRESHOLD) {
+        return {
+          ok: false,
+          error: `${normalized} was confirmed used up by ${reporters} independent reports and can’t be re-added.`,
+        };
+      }
+
+      const reactivated = await sql<{ code: string }>`
+        update codes
+        set
+          status = 'active',
+          assumed_cap = greatest(assumed_cap, handouts + ${ASSUMED_CAP}),
+          streak_bad = ${reporters}
+        where id = ${existing.id}
+          and (
+            select count(distinct claims.visitor_key)
+            from claims
+            where claims.code_id = codes.id
+              and claims.result = 'used_up'
+          ) < ${USED_UP_REPORT_THRESHOLD}
+        returning code
+      `;
+      if (reactivated[0]) return { ok: true, code: reactivated[0].code };
+      return { ok: false, error: await duplicateMessage(sql, normalized) };
+    }
 
     try {
       await sql`
